@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import axios, {AxiosRequestConfig} from 'axios'
 import {CacheLevel, Cancel, RequestConfig, Response, Status, TransForm} from "./types";
-import {buildCacheData, comparisonAny, getItem, getKey, isExpired, setItem} from './utils'
+import {buildCacheData, comparisonAny, getItem, getKey, isExpired, logger, setItem} from './utils'
 import {options} from './config'
 
 const normalTransform: TransForm<any> = (response => response);
@@ -52,6 +52,7 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
                 setData(res);
                 CacheMaps.set(cacheKey, buildCacheData(res, expiration));
                 setStatus(Status.SUCCESS);
+                logger('loadData with net', cacheKey);
                 if (cache === CacheLevel.STORAGE) {
                     return setItem(cacheKey, res, expiration)
                 }
@@ -71,7 +72,7 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
     useEffect(() => {
         let firstUseCache = initWithCache && CacheMaps.has(cacheKey);
         if (firstUseCache) {
-            console.log('initData with cache');
+            logger('initData with cache', cacheData);
             setData(CacheMaps.get(cacheKey)?.data);
         }
         const loading = !onlyLoadOnce && tracker.current.count !== 0 && !firstUseCache;
@@ -82,7 +83,7 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
                     if (res) {
                         setData(res);
                         setStatus(Status.SUCCESS);
-                        console.log('fetchData with storage:' + cacheKey);
+                        logger('loadData with storage', cacheKey);
                         return;
                     }
                     //获取不到数据则进行网络请求数据
@@ -94,7 +95,7 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
                 if (CacheMaps.has(cacheKey) && !isExpired(CacheMaps.get(cacheKey)!.expiration)) {
                     setData(CacheMaps.get(cacheKey)?.data);
                     setStatus(Status.SUCCESS);
-                    console.log('fetchData with cache:' + cacheKey);
+                    logger('loadData with memory', cacheKey);
                     break;
                 }
             case CacheLevel.NO:

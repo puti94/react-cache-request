@@ -1,6 +1,6 @@
 {
   "name": "react-cache-request",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "一个简易使用axios网络请求的hook,自带状态管理，缓存功能",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,10 +18,10 @@
   "dependencies": {
     "@types/axios": "^0.14.0",
     "@types/humanize-ms": "^1.2.0",
-    "@types/react": "^16.9.0",
+    "@types/ms": "^0.7.31",
     "@types/node": "^12.0.0",
-    "axios": "^0.19.2",
-    "humanize-ms": "^1.2.1"
+    "@types/react": "^16.9.0",
+    "ms": "^2.1.2"
   },
   "keywords": [
     "react-hooks",

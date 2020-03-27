@@ -8,6 +8,7 @@ export let options: BaseConfig = {
     initWithCache: true,
     cache: CacheLevel.STORAGE,
     onlyLoadOnce: true,
+    logger: true,
     request: axios.create(),
     store: new DefaultStore()
 };

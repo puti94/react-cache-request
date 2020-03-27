@@ -1,7 +1,14 @@
 import {options} from './config'
 import {AxiosRequestConfig} from "axios";
-import ms from "humanize-ms";
+import ms from "ms";
 import {RequestConfig} from "./types";
+
+export function logger(message?: any, ...optionalParams: any[]) {
+    if (options.logger) {
+        console.log('react-cache-request:' + message, ...optionalParams)
+    }
+}
+
 
 function getType(data: any) {
     return Object.prototype.toString.call(data).substring(8).split(/]/)[0]
@@ -71,8 +78,17 @@ export function buildCacheData(value: any, expiration: number | string) {
     }
 }
 
+function formatMs(t: string | number) {
+    if (typeof t === 'number') return t;
+    const r = ms(t);
+    if (r === undefined) {
+        console.error('invalid expiration value');
+    }
+    return r;
+}
+
 export function getExpiration(expiration: number | string) {
-    return Date.now() + ms(expiration)
+    return Date.now() + formatMs(expiration)
 }
 
 export function isExpired(expiration: number) {
@@ -80,7 +96,9 @@ export function isExpired(expiration: number) {
 }
 
 export function setItem(key: string, value: any, expiration: number | string) {
-    return options.store!.setItem(appendKey(key), JSON.stringify(buildCacheData(value, expiration)))
+    const cacheData = buildCacheData(value, expiration);
+    logger('setItem', key, cacheData);
+    return options.store!.setItem(appendKey(key), JSON.stringify(cacheData))
 }
 
 export async function getItem(key: string) {
@@ -89,8 +107,10 @@ export async function getItem(key: string) {
         if (jsonString != null) {
             const {expiration, data} = JSON.parse(jsonString);
             if (isExpired(expiration)) {
+                logger('getItem', key, 'isExpired');
                 return null
             }
+            logger('getItem', key, {expiration, data});
             return data
         }
     } catch (e) {
@@ -110,6 +130,7 @@ export async function removeAll() {
 }
 
 export function removeItem(key: string) {
+    logger('removeItem', key);
     return options.store!.removeItem(appendKey(key))
 }
 
