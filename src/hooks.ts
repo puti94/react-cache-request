@@ -27,12 +27,14 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
         cancelOnUnmount = options.cancelOnUnmount!,
         initWithCache = options.initWithCache!,
         timer,
+        defaultData,
         cache = options.cache!,
         expiration = options.expiration!
     } = cacheRequestConfig;
 
 
-    const [data, setData] = useState<M>();
+    // @ts-ignore
+    const [data, setData] = useState<M>(defaultData);
     const [status, setStatus] = useState<Status>(() => {
         if (initWithCache && CacheMaps.has(cacheKey)) {
             return Status.SUCCESS
