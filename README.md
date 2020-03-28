@@ -41,6 +41,7 @@ export interface RequestConfig<M> {
     cancelOnUnmount?: boolean, //组件注销时是否取消网络请求 默认true
     timer?: number, // 启动定时刷新数据的定时器
     request?: AxiosInstance, // 设置axios的实例，将会覆盖默认的配置
+    onRequestEnd?: () => void, // 此次请求完成后的钩子
     transform?: TransForm<M> // 转化数据的钩子
 }
 

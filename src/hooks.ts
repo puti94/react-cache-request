@@ -5,6 +5,8 @@ import {buildCacheData, comparisonAny, getItem, getKey, isExpired, logger, setIt
 import {options} from './config'
 
 const normalTransform: TransForm<any> = (response => response);
+const normalOnRequestEnd = () => {
+};
 
 /**
  * 内存缓存数据,加快数据初始化速度
@@ -29,7 +31,8 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
         timer,
         defaultData,
         cache = options.cache!,
-        expiration = options.expiration!
+        expiration = options.expiration!,
+        onRequestEnd = normalOnRequestEnd
     } = cacheRequestConfig;
 
 
@@ -65,6 +68,9 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
                 setStatus(Status.ERROR);
                 return null
             })
+            .finally(() => {
+                onRequestEnd();
+            })
     }, [cache, cacheAxiosConfig, cacheKey, cacheRequestConfig, expiration, setData]);
     const cancel = useCallback((message?: string) => {
         tracker.current.cancel && tracker.current.cancel(message)
@@ -85,6 +91,7 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
                     if (res) {
                         setData(res);
                         setStatus(Status.SUCCESS);
+                        onRequestEnd();
                         logger('loadData with storage', cacheKey);
                         return;
                     }
@@ -97,6 +104,7 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
                 if (CacheMaps.has(cacheKey) && !isExpired(CacheMaps.get(cacheKey)!.expiration)) {
                     setData(CacheMaps.get(cacheKey)?.data);
                     setStatus(Status.SUCCESS);
+                    onRequestEnd();
                     logger('loadData with memory', cacheKey);
                     break;
                 }
