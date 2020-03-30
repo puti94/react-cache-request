@@ -73,7 +73,7 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
                 setError(e);
                 return null;
             })
-    }, [initWithCache, cacheKey]);
+    }, [initWithCache, cacheAxiosConfig, cacheKey]);
 
 
     const cancel = useCallback((message?: string) => {

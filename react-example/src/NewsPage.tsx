@@ -52,7 +52,7 @@ const requestConfig = {
     request: request2,
     filterData: ((list: Array<Topic>, item: Topic) => list.length === 0 || list.findIndex(t => t.id === item.id) < 0),
     expiration: '20s',
-    key: (config: AxiosRequestConfig) => `topics?page=${config.params.page}`
+    cache: CacheLevel.NO
 }
 
 export function WithPage() {
