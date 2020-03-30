@@ -13,6 +13,10 @@ export let options: BaseConfig = {
     store: new DefaultStore()
 };
 
+/**
+ * 配置默认项
+ * @param params
+ */
 export function configOptions(params: BaseConfig) {
     Object.assign(options, params)
 }

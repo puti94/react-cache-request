@@ -1,19 +1,19 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
-import axios, {AxiosRequestConfig} from 'axios'
-import {CacheLevel, Cancel, RequestConfig, Response, Status, TransForm} from "./types";
-import {buildCacheData, comparisonAny, getItem, getKey, isExpired, logger, setItem} from './utils'
+import {AxiosRequestConfig} from 'axios'
+import {Cancel, FilterData, PageResponse, RequestConfig, RequestWithPageConfig, Response, Status} from "./types";
+import {comparisonAny, getKey, logger} from './utils'
 import {options} from './config'
+import {CacheMaps, fetchResponse, fetchResponseWithNet} from "./fetchResponse";
 
-const normalTransform: TransForm<any> = (response => response);
-
-/**
- * 内存缓存数据,加快数据初始化速度
- * @type {Map<string, any>}
- */
-const CacheMaps: Map<string, { data: any, expiration: number }> = new Map();
 
 type Tracker = { cancel?: Cancel, count: number }
 
+/**
+ * 封装axios请求的hook，具有缓存管理，状态回调等功能
+ * @param axiosRequestConfig
+ * @param requestConfig
+ * @returns {{cancel: (message?: string) => void; data: M; fetch: () => Promise<M | never>; refresh: () => Promise<M | never>; cancelTimer: () => void; error: Error | undefined; key: string | undefined; status: Status}}
+ */
 export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestConfig: RequestConfig<M> = {}): Response<M> {
 
     const tracker = useRef<Tracker>({
@@ -27,8 +27,6 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
         initWithCache = options.initWithCache!,
         timer,
         defaultData,
-        cache = options.cache!,
-        expiration = options.expiration!,
         runOnChangeAndMount = options.runOnChangeAndMount!,
     } = cacheRequestConfig;
 
@@ -41,58 +39,41 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
     const fetchDataWithNet = useCallback(() => {
         setStatus(Status.LOADING);
         tracker.current.count += 1;
-        return fetchResponse(cacheAxiosConfig, cacheRequestConfig, (fn: Cancel) => tracker.current.cancel = fn)
+        return fetchResponseWithNet(cacheAxiosConfig, cacheRequestConfig, (fn: Cancel) => tracker.current.cancel = fn, cacheKey)
             .then(res => {
                 setData(res);
-                CacheMaps.set(cacheKey, buildCacheData(res, expiration));
                 setStatus(Status.SUCCESS);
-                logger('loadData with net', cacheKey);
-                if (cache === CacheLevel.STORAGE) {
-                    setItem(cacheKey, res, expiration)
-                }
                 return res
             })
             .catch(e => {
                 setError(e);
                 setStatus(Status.ERROR);
-                return
+                return null
             })
-    }, [cache, cacheAxiosConfig, cacheKey, cacheRequestConfig, expiration]);
+    }, [cacheAxiosConfig, cacheKey, cacheRequestConfig]);
 
     const fetch = useCallback(() => {
         setStatus(Status.LOADING);
-        let firstUseCache = initWithCache && CacheMaps.has(cacheKey);
-        if (firstUseCache) {
-            logger('initData with cache', cacheData);
-            setData(CacheMaps.get(cacheKey)?.data);
+        tracker.current.count += 1;
+        if (initWithCache && cacheKey) {
+            //只做从内存初始化数据
+            if (CacheMaps.has(cacheKey)) {
+                logger('initData with cache', cacheData);
+                setData(CacheMaps.get(cacheKey)?.data);
+            }
         }
-        switch (cache) {
-            case CacheLevel.STORAGE:
-                return getItem(cacheKey)
-                    .then(res => {
-                        //数据不为空表示数据有效，直接设置数据源
-                        if (res) {
-                            setData(res);
-                            setStatus(Status.SUCCESS);
-                            logger('loadData with storage', cacheKey);
-                            return res;
-                        }
-                        //获取不到数据则进行网络请求数据
-                        return fetchDataWithNet()
-                    });
-            case CacheLevel.MEMORY:
-                //如果内存有缓存数据并且没有过期，则设置缓存数据
-                if (CacheMaps.has(cacheKey) && !isExpired(CacheMaps.get(cacheKey)!.expiration)) {
-                    setData(CacheMaps.get(cacheKey)?.data);
-                    setStatus(Status.SUCCESS);
-                    logger('loadData with memory', cacheKey);
-                    return CacheMaps.get(cacheKey)?.data
-                }
-            case CacheLevel.NO:
-            default:
-                return fetchDataWithNet();
-        }
-    }, [fetchDataWithNet, initWithCache, cacheKey, cache]);
+        return fetchResponse(cacheAxiosConfig, cacheRequestConfig, (fn: Cancel) => tracker.current.cancel = fn, cacheKey)
+            .then(response => {
+                setData(response);
+                setStatus(Status.SUCCESS);
+                return response;
+            })
+            .catch(e => {
+                setStatus(Status.ERROR);
+                setError(e);
+                return null;
+            })
+    }, [initWithCache, cacheKey]);
 
 
     const cancel = useCallback((message?: string) => {
@@ -120,29 +101,71 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
         status,
         error,
         cancel,
+        key: cacheKey,
         cancelTimer
     }
 }
 
-
-function fetchResponse<M>(axiosRequestConfig: AxiosRequestConfig,
-                          requestConfig: RequestConfig<M> = {}, setCancel: (cancel: Cancel) => void) {
-    const {
-        transform = normalTransform,
-    } = requestConfig;
-
-    const source = axios.CancelToken.source();
-    setCancel(source.cancel);
-    const request = requestConfig.request || options.request;
-    return request!({
-        cancelToken: source.token,
-        ...axiosRequestConfig
-    })
-        .then(transform)
+function handleData<T>(data: Array<T> | undefined, list?: Array<T>, filterData?: FilterData<T>) {
+    if (list && filterData) {
+        return data!.filter(item => filterData(list, item))
+    }
+    return data || [];
 }
 
 
-export function useInterval(timer: undefined | number) {
+/**
+ * 针对分页请求数据需要拼接的一个hook
+ * @param getConfig
+ * @param requestConfig
+ * @returns {Pick<Response<Array<T>>, keyof Response<Array<T>> extends "refresh" | "data" | "status" | "fetch" ? never : keyof Response<Array<T>>> & {onLoadMore: () => void; data: Array<T>; onRefresh: () => void; fetch: () => Promise<Array<T> | null>; isLoadingMore: false | boolean; refresh: () => Promise<Array<T> | null>; isRefreshing: false | boolean; status: Status}}
+ */
+export function useRequestWithPage<T>(getConfig: (page: number) => AxiosRequestConfig, requestConfig: RequestWithPageConfig<T> = {}): PageResponse<T> {
+    const [list, setList] = useState<Array<T>>([]);
+    const [page, setPage] = useState<number>(1);
+    const config = useMemo(() => getConfig(page), [page, getConfig]);
+    const {filterData, ...otherConfig} = requestConfig;
+    const {data, status, fetch, refresh, ...other} = useRequest<Array<T>>(config, {
+        ...otherConfig,
+        initWithCache: false
+    });
+    const isFirstPage = useMemo(() => page === 1, [page]);
+    const isRefreshing = useMemo(() => isFirstPage && status === Status.LOADING, [isFirstPage, status]);
+    const isLoadingMore = useMemo(() => !isFirstPage && status === Status.LOADING, [isFirstPage, status]);
+    const onLoadMore = useCallback(() => {
+        if (status === Status.LOADING) return;
+        setPage(t => t + 1);
+    }, [status]);
+    const onRefresh = useCallback(() => {
+        if (status === Status.LOADING) return;
+        !isFirstPage ? setPage(1) : refresh();
+    }, [status, isFirstPage]);
+    useEffect(() => {
+        if (isFirstPage) {
+            setList(handleData(data))
+        } else {
+            setList(prevState => prevState.concat(handleData(data, prevState, filterData)))
+        }
+    }, [data]);
+    return {
+        ...other,
+        status,
+        isRefreshing,
+        isLoadingMore,
+        fetch,
+        refresh,
+        data: list,
+        onLoadMore,
+        onRefresh,
+    }
+}
+
+/**
+ * 定时返回一个时间戳的hook
+ * @param timer
+ * @returns {{cancel: () => void; tag: number | undefined}}
+ */
+export function useInterval(timer: undefined | number): { tag: number | undefined, cancel: () => void } {
     const _timer = useRef<NodeJS.Timeout | undefined>();
     const [tag, setTag] = useState<number>();
     const cancel = useCallback(() => {
@@ -165,7 +188,13 @@ export function useInterval(timer: undefined | number) {
 }
 
 
-export function useIntervalFn(fn: () => void, timer: undefined | number) {
+/**
+ * 定时执行的hook
+ * @param fn
+ * @param timer
+ * @returns {() => void}
+ */
+export function useIntervalFn(fn: () => void, timer: undefined | number): () => void {
     const {cancel, tag} = useInterval(timer);
     useEffect(() => {
         if (tag) {
@@ -193,6 +222,10 @@ export function useComparisonChange<M>(params: M) {
 }
 
 
+/**
+ * 组件卸载是的hook
+ * @param fn
+ */
 function useUnmount(fn: () => void) {
     const fnRef = useRef(fn);
     fnRef.current = fn;

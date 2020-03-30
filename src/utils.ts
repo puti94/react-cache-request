@@ -1,7 +1,8 @@
 import {options} from './config'
 import {AxiosRequestConfig} from "axios";
 import ms from "ms";
-import {RequestConfig} from "./types";
+import {CacheLevel, RequestConfig} from "./types";
+import {CacheMaps} from "./fetchResponse";
 
 export function logger(message?: any, ...optionalParams: any[]) {
     if (options.logger) {
@@ -57,8 +58,17 @@ export function comparisonAny(sourceObj: any, compareObj: any) {
 }
 
 export function getKey<M>(axiosRequestConfig: AxiosRequestConfig,
-                          requestConfig: RequestConfig<M>): string {
-    if (requestConfig.key) return requestConfig.key;
+                          requestConfig: RequestConfig<M>): string | undefined {
+    const {key, cache, initWithCache} = requestConfig;
+    if (key) {
+        if (typeof key === 'function') {
+            return key(axiosRequestConfig)
+        }
+        return key;
+    }
+    if (!initWithCache || cache === CacheLevel.NO) {
+        return
+    }
     return JSON.stringify(axiosRequestConfig)
 }
 
@@ -71,14 +81,14 @@ function removeKeyNamespace(key: string) {
     return key.replace(options.namespace!, '')
 }
 
-export function buildCacheData(value: any, expiration: number | string) {
+export function buildCacheData(value: any) {
     return {
-        expiration: getExpiration(expiration),
+        time: Date.now(),
         data: value
     }
 }
 
-function formatMs(t: string | number) {
+function formatMs(t: string | number): number {
     if (typeof t === 'number') return t;
     const r = ms(t);
     if (r === undefined) {
@@ -87,30 +97,44 @@ function formatMs(t: string | number) {
     return r;
 }
 
-export function getExpiration(expiration: number | string) {
-    return Date.now() + formatMs(expiration)
+/**
+ * 判断是否过期
+ * @param time  创建时间戳
+ * @param expiration 过期时间
+ * @returns {boolean}
+ */
+export function isExpired(time: number, expiration: number | string): boolean {
+    return Date.now() - (time + formatMs(expiration)) > 0
 }
 
-export function isExpired(expiration: number) {
-    return Date.now() > expiration
-}
-
-export function setItem(key: string, value: any, expiration: number | string) {
-    const cacheData = buildCacheData(value, expiration);
+/**
+ * 设置缓存数据
+ * @param key
+ * @param value
+ * @returns {Promise<void>}
+ */
+export function setItem(key: string, value: any) {
+    const cacheData = buildCacheData(value);
     logger('setItem', key, cacheData);
     return options.store!.setItem(appendKey(key), JSON.stringify(cacheData))
 }
 
-export async function getItem(key: string) {
+/**
+ * 获取缓存数据
+ * @param key 键值
+ * @param expiration  过期时间
+ * @returns {Promise<null>}
+ */
+export async function getItem(key: string, expiration: number | string) {
     const jsonString = await options.store!.getItem(appendKey(key));
     try {
         if (jsonString != null) {
-            const {expiration, data} = JSON.parse(jsonString);
-            if (isExpired(expiration)) {
-                logger('getItem', key, 'isExpired');
+            const {time, data} = JSON.parse(jsonString);
+            if (isExpired(time, expiration)) {
+                logger('getItem', key, 'Expired');
                 return null
             }
-            logger('getItem', key, {expiration, data});
+            logger('getItem', key, {time, data, expiration});
             return data
         }
     } catch (e) {
@@ -119,21 +143,40 @@ export async function getItem(key: string) {
     }
 }
 
+/**
+ * 获取所有缓存的key值
+ * @returns {Promise<string[]>}
+ */
 export async function getAllCacheKeys() {
     const keys = await options.store!.getAllKeys();
     return keys.filter(key => key.startsWith(options.namespace!)).map(removeKeyNamespace)
 }
 
+/**
+ * 移除所有缓存的数据
+ * @returns {Promise<void[]>}
+ */
 export async function removeAll() {
     const keys = await getAllCacheKeys();
+    CacheMaps.clear();
     return Promise.all(keys.map(removeItem))
 }
 
+/**
+ * 移除指定key值的数据
+ * @param key
+ * @returns {Promise<void>}
+ */
 export function removeItem(key: string) {
     logger('removeItem', key);
+    CacheMaps.delete(key);
     return options.store!.removeItem(appendKey(key))
 }
 
+/**
+ * 获取storage缓存的大小
+ * @returns {Promise<number>}
+ */
 export async function getCacheSize(): Promise<number> {
     const keys = await getAllCacheKeys();
     const allCacheData = await Promise.all(keys.map((key) => options.store!.getItem(appendKey(key))));

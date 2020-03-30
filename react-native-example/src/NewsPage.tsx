@@ -55,4 +55,3 @@ function NewsItem({item}: { item: Topic }) {
         </View>
     </View>
 }
-

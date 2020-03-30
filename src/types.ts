@@ -1,8 +1,10 @@
-import {AxiosInstance, AxiosResponse} from 'axios'
+import {AxiosInstance, AxiosResponse, AxiosRequestConfig} from 'axios'
 
-export interface RequestConfig<M> {
+type KeyFn = (config: AxiosRequestConfig) => string
+
+export type RequestConfig<M> = {
     defaultData?: M, //默认数据
-    key?: string, //指定请求的key值，用于保存数据，如不指定将直接使用序列化请求参数的值
+    key?: string | KeyFn, //指定请求的key值，用于保存数据，如不指定将直接使用序列化请求参数的值
     cache?: CacheLevel, //设置缓存策略 'no'(不缓存)|'memory'(内存缓存)|'storage'(磁盘缓存) 默认storage
     initWithCache?: boolean,//最开始的数据源是否用内存缓存的值 默认true
     expiration?: number | string, // 过期时间 数字类型，单位为毫秒数，例如 5000。字符类型，会通过 ms 转换成毫秒数，例如 5s。
@@ -13,7 +15,13 @@ export interface RequestConfig<M> {
     transform?: TransForm<M> // 转化数据的钩子
 }
 
-export type TransForm<M> = (response: AxiosResponse) => M
+export type FilterData<T> = (list: Array<T>, item: T) => boolean;
+
+export type RequestWithPageConfig<T> = {
+    filterData?: FilterData<T>
+} & RequestConfig<Array<T>>
+
+export type TransForm<M> = (response: AxiosResponse<M> | M | any) => M
 
 export enum Status {
     LOADING = 'loading',
@@ -53,15 +61,23 @@ export interface ResponseCacheStorage {
 
 export type Cancel = (message?: string) => void
 
-export interface Response<M> {
+export type Response<M> = {
     data?: M, //请求的数据
     status: Status, //请求过程中的状态 'loading'(请求中)| 'success'(请求成功)|'error'(请求失败)
     error?: Error, //请求具体的错误
-    refresh: (loading?: boolean) => Promise<M | undefined>,//重新加载数据的方法，将直接走网络请求
+    refresh: () => Promise<M | null>,//重新加载数据的方法，将直接走网络请求
     cancel: Cancel,// 取消当前请求的方法，要是请求还未完成，请求将中断
+    key: string | undefined,// 取消当前请求的方法，要是请求还未完成，请求将中断
     cancelTimer: () => void, //取消定时任务的方法
-    fetch: () => Promise<M | undefined>, //手动调用获取数据的方法
+    fetch: () => Promise<M | null>, //手动调用获取数据的方法
 }
+
+export type PageResponse<T> = {
+    isRefreshing: boolean,
+    isLoadingMore: boolean,
+    onRefresh: () => void
+    onLoadMore: () => void
+} & Response<Array<T>>
 
 /**
  * 默认的配置项
