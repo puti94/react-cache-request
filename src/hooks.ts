@@ -5,8 +5,6 @@ import {buildCacheData, comparisonAny, getItem, getKey, isExpired, logger, setIt
 import {options} from './config'
 
 const normalTransform: TransForm<any> = (response => response);
-const normalOnRequestEnd = () => {
-};
 
 /**
  * 内存缓存数据,加快数据初始化速度
@@ -25,32 +23,23 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
     const cacheRequestConfig = useComparisonChange(requestConfig);
     const cacheKey = useMemo(() => getKey(cacheAxiosConfig, cacheRequestConfig), [cacheAxiosConfig, cacheRequestConfig]);
     const {
-        onlyLoadOnce = options.onlyLoadOnce!,
         cancelOnUnmount = options.cancelOnUnmount!,
         initWithCache = options.initWithCache!,
         timer,
         defaultData,
         cache = options.cache!,
         expiration = options.expiration!,
-        onRequestEnd = normalOnRequestEnd
+        runOnChangeAndMount = options.runOnChangeAndMount!,
     } = cacheRequestConfig;
 
 
     // @ts-ignore
     const [data, setData] = useState<M>(defaultData);
-    const [status, setStatus] = useState<Status>(() => {
-        if (initWithCache && CacheMaps.has(cacheKey)) {
-            return Status.SUCCESS
-        } else {
-            return Status.LOADING
-        }
-    });
+    const [status, setStatus] = useState<Status>(Status.SUCCESS);
     const [error, setError] = useState<Error>();
 
-    const fetchData = useCallback((loading?: boolean) => {
-        if (loading) {
-            setStatus(Status.LOADING);
-        }
+    const fetchDataWithNet = useCallback(() => {
+        setStatus(Status.LOADING);
         tracker.current.count += 1;
         return fetchResponse(cacheAxiosConfig, cacheRequestConfig, (fn: Cancel) => tracker.current.cancel = fn)
             .then(res => {
@@ -59,61 +48,62 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
                 setStatus(Status.SUCCESS);
                 logger('loadData with net', cacheKey);
                 if (cache === CacheLevel.STORAGE) {
-                    return setItem(cacheKey, res, expiration)
+                    setItem(cacheKey, res, expiration)
                 }
                 return res
             })
             .catch(e => {
                 setError(e);
                 setStatus(Status.ERROR);
-                return null
+                return
             })
-            .finally(() => {
-                onRequestEnd();
-            })
-    }, [cache, cacheAxiosConfig, cacheKey, cacheRequestConfig, expiration, setData]);
-    const cancel = useCallback((message?: string) => {
-        tracker.current.cancel && tracker.current.cancel(message)
-    }, []);
-    const cancelTimer = useIntervalFn(fetchData, timer);
+    }, [cache, cacheAxiosConfig, cacheKey, cacheRequestConfig, expiration]);
 
-    useEffect(() => {
+    const fetch = useCallback(() => {
+        setStatus(Status.LOADING);
         let firstUseCache = initWithCache && CacheMaps.has(cacheKey);
         if (firstUseCache) {
             logger('initData with cache', cacheData);
             setData(CacheMaps.get(cacheKey)?.data);
         }
-        const loading = !onlyLoadOnce && tracker.current.count !== 0 && !firstUseCache;
         switch (cache) {
             case CacheLevel.STORAGE:
-                getItem(cacheKey).then(res => {
-                    //数据不为空表示数据有效，直接设置数据源
-                    if (res) {
-                        setData(res);
-                        setStatus(Status.SUCCESS);
-                        onRequestEnd();
-                        logger('loadData with storage', cacheKey);
-                        return;
-                    }
-                    //获取不到数据则进行网络请求数据
-                    fetchData(loading)
-                });
-                break;
+                return getItem(cacheKey)
+                    .then(res => {
+                        //数据不为空表示数据有效，直接设置数据源
+                        if (res) {
+                            setData(res);
+                            setStatus(Status.SUCCESS);
+                            logger('loadData with storage', cacheKey);
+                            return res;
+                        }
+                        //获取不到数据则进行网络请求数据
+                        return fetchDataWithNet()
+                    });
             case CacheLevel.MEMORY:
                 //如果内存有缓存数据并且没有过期，则设置缓存数据
                 if (CacheMaps.has(cacheKey) && !isExpired(CacheMaps.get(cacheKey)!.expiration)) {
                     setData(CacheMaps.get(cacheKey)?.data);
                     setStatus(Status.SUCCESS);
-                    onRequestEnd();
                     logger('loadData with memory', cacheKey);
-                    break;
+                    return CacheMaps.get(cacheKey)?.data
                 }
             case CacheLevel.NO:
             default:
-                fetchData(loading);
-                break;
+                return fetchDataWithNet();
         }
-    }, [onlyLoadOnce, fetchData, initWithCache, cacheKey, cache]);
+    }, [fetchDataWithNet, initWithCache, cacheKey, cache]);
+
+
+    const cancel = useCallback((message?: string) => {
+        tracker.current.cancel && tracker.current.cancel(message)
+    }, []);
+    const cancelTimer = useIntervalFn(fetchDataWithNet, timer);
+
+    useEffect(() => {
+        if (!runOnChangeAndMount) return;
+        fetch();
+    }, [fetch, runOnChangeAndMount]);
 
     useUnmount(() => {
         if (cancelOnUnmount) {
@@ -125,7 +115,8 @@ export function useRequest<M>(axiosRequestConfig: AxiosRequestConfig, requestCon
     const cacheData = useComparisonChange(data);
     return {
         data: cacheData,
-        refresh: fetchData,
+        refresh: fetchDataWithNet,
+        fetch,
         status,
         error,
         cancel,

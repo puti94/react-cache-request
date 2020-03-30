@@ -6,11 +6,10 @@ export interface RequestConfig<M> {
     cache?: CacheLevel, //设置缓存策略 'no'(不缓存)|'memory'(内存缓存)|'storage'(磁盘缓存) 默认storage
     initWithCache?: boolean,//最开始的数据源是否用内存缓存的值 默认true
     expiration?: number | string, // 过期时间 数字类型，单位为毫秒数，例如 5000。字符类型，会通过 ms 转换成毫秒数，例如 5s。
-    onlyLoadOnce?: boolean, // 是否仅有第一次加载数据时设置status为loading 默认true
     cancelOnUnmount?: boolean, //组件注销时是否取消网络请求 默认true
+    runOnChangeAndMount?: boolean, //组件挂载时或者参数变化是是否立即请求数据 默认true
     timer?: number, // 启动定时刷新数据的定时器
     request?: AxiosInstance, // 设置axios的实例，将会覆盖默认的配置
-    onRequestEnd?: () => void, // 此次请求完成后的钩子
     transform?: TransForm<M> // 转化数据的钩子
 }
 
@@ -58,9 +57,10 @@ export interface Response<M> {
     data?: M, //请求的数据
     status: Status, //请求过程中的状态 'loading'(请求中)| 'success'(请求成功)|'error'(请求失败)
     error?: Error, //请求具体的错误
-    refresh: (loading?: boolean) => Promise<M | undefined | null>,//重新加载数据的方法，将直接走网络请求
+    refresh: (loading?: boolean) => Promise<M | undefined>,//重新加载数据的方法，将直接走网络请求
     cancel: Cancel,// 取消当前请求的方法，要是请求还未完成，请求将中断
     cancelTimer: () => void, //取消定时任务的方法
+    fetch: () => Promise<M | undefined>, //手动调用获取数据的方法
 }
 
 /**
@@ -72,7 +72,7 @@ export interface BaseConfig {
     cache?: CacheLevel, // 缓存策略 默认'storage'
     initWithCache?: boolean, //初始数据从缓存拿 默认true
     cancelOnUnmount?: boolean, //组件注销时是否取消请求 默认true
-    onlyLoadOnce?: boolean,
+    runOnChangeAndMount?: boolean, //组件注销时是否取消请求 默认true
     logger?: boolean, // 是否开启日志 默认true(生产模式下请关闭)
     request?: AxiosInstance, //axios实力 默认 axios.create()
     store?: ResponseCacheStorage // 外存缓存的对象 默认为localStorage react-native 需要传入自己实现ResponseCacheStorage接口的对象

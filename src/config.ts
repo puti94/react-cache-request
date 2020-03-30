@@ -7,7 +7,7 @@ export let options: BaseConfig = {
     expiration: '1d',
     initWithCache: true,
     cache: CacheLevel.STORAGE,
-    onlyLoadOnce: true,
+    runOnChangeAndMount: true,
     logger: true,
     request: axios.create(),
     store: new DefaultStore()
