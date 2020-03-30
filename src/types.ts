@@ -62,20 +62,57 @@ export interface ResponseCacheStorage {
 export type Cancel = (message?: string) => void
 
 export type Response<M> = {
-    data?: M, //请求的数据
-    status: Status, //请求过程中的状态 'loading'(请求中)| 'success'(请求成功)|'error'(请求失败)
-    error?: Error, //请求具体的错误
-    refresh: () => Promise<M | null>,//重新加载数据的方法，将直接走网络请求
-    cancel: Cancel,// 取消当前请求的方法，要是请求还未完成，请求将中断
-    key: string | undefined,// 取消当前请求的方法，要是请求还未完成，请求将中断
-    cancelTimer: () => void, //取消定时任务的方法
-    fetch: () => Promise<M | null>, //手动调用获取数据的方法
+    /**
+     * 请求的数据
+     * @param M
+     */
+    data?: M,
+    /**
+     * 请求过程中的状态 'loading'(请求中)| 'success'(请求成功)|'error'(请求失败)
+     */
+    status: Status,
+    /**
+     * 请求具体的错误
+     */
+    error?: Error,
+    /**
+     * 重新加载数据的方法，将直接走网络请求
+     */
+    refresh: () => Promise<M | null>,
+    /**
+     * 取消当前请求的方法，要是请求还未完成，请求将中断
+     */
+    cancel: Cancel,
+    /**
+     * 当前请求的键值
+     */
+    key: string | undefined,
+    /**
+     * 取消定时任务的方法
+     */
+    cancelTimer: () => void,
+    /**
+     * 手动调用获取数据的方法
+     */
+    fetch: () => Promise<M | null>,
 }
 
 export type PageResponse<T> = {
+    /**
+     * 下拉加载中
+     */
     isRefreshing: boolean,
+    /**
+     * 加载更多中
+     */
     isLoadingMore: boolean,
+    /**
+     * 下拉加载的方法
+     */
     onRefresh: () => void
+    /**
+     * 加载更多的方法
+     */
     onLoadMore: () => void
 } & Response<Array<T>>
 
@@ -83,13 +120,43 @@ export type PageResponse<T> = {
  * 默认的配置项
  */
 export interface BaseConfig {
-    namespace?: string, // 命名空间，此库所有保存的数据将加上这个前缀 默认react-request:
-    expiration?: string, // 过期时间 默认'1d'
-    cache?: CacheLevel, // 缓存策略 默认'storage'
-    initWithCache?: boolean, //初始数据从缓存拿 默认true
-    cancelOnUnmount?: boolean, //组件注销时是否取消请求 默认true
-    runOnChangeAndMount?: boolean, //组件注销时是否取消请求 默认true
-    logger?: boolean, // 是否开启日志 默认true(生产模式下请关闭)
-    request?: AxiosInstance, //axios实力 默认 axios.create()
-    store?: ResponseCacheStorage // 外存缓存的对象 默认为localStorage react-native 需要传入自己实现ResponseCacheStorage接口的对象
+    /**
+     * 命名空间，此库所有保存的数据将加上这个前缀 默认react-request:
+     */
+    namespace?: string,
+    /**
+     * 过期时间 默认'1d'
+     */
+    expiration?: string,
+    /**
+     * 缓存策略 默认'storage'
+     */
+    cache?: CacheLevel,
+    /**
+     * 初始数据从缓存拿 默认true
+     */
+    initWithCache?: boolean,
+    /**
+     * 组件注销时是否取消请求 默认true
+     */
+    cancelOnUnmount?: boolean,
+    /**
+     * 组件注销时是否取消请求 默认true
+     */
+    runOnChangeAndMount?: boolean,
+    /**
+     * 是否开启日志 默认true(生产模式下请关闭)
+     */
+    logger?: boolean,
+    /**
+     * axios实例 默认 axios.create()
+     */
+    request?: AxiosInstance,
+    /**
+     * 外存缓存的对象 默认为localStorage react-native 需要传入AsyncStorage
+     * ```js
+     * configOptions({store: AsyncStorage})
+     * ```
+     */
+    store?: ResponseCacheStorage
 }

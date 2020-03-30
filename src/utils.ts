@@ -57,6 +57,13 @@ export function comparisonAny(sourceObj: any, compareObj: any) {
     return true;
 }
 
+/**
+ * 根据配置自动生成key值
+ * @param axiosRequestConfig
+ * @param requestConfig
+ * @returns {string}
+ * @protected
+ */
 export function getKey<M>(axiosRequestConfig: AxiosRequestConfig,
                           requestConfig: RequestConfig<M>): string | undefined {
     const {key, cache, initWithCache} = requestConfig;
@@ -73,6 +80,11 @@ export function getKey<M>(axiosRequestConfig: AxiosRequestConfig,
 }
 
 
+/**
+ * 生成包含命名空间前缀的键值
+ * @param key
+ * @returns {string}
+ */
 function appendKey(key: string) {
     return `${options.namespace}${key}`
 }
@@ -88,6 +100,11 @@ export function buildCacheData(value: any) {
     }
 }
 
+/**
+ * 将过期时间转化为数值显示
+ * @param t
+ * @returns {number}
+ */
 function formatMs(t: string | number): number {
     if (typeof t === 'number') return t;
     const r = ms(t);
@@ -102,6 +119,7 @@ function formatMs(t: string | number): number {
  * @param time  创建时间戳
  * @param expiration 过期时间
  * @returns {boolean}
+ * @private
  */
 export function isExpired(time: number, expiration: number | string): boolean {
     return Date.now() - (time + formatMs(expiration)) > 0
