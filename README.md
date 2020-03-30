@@ -28,7 +28,7 @@ import {useRequest} from 'react-cache-request';
 
 ### Docs
 
-[文档](/docs/index.html)
+[文档](https://puti94.github.io/react-cache-request/)
 
 ### Example
 项目中有react和react-native的示例
