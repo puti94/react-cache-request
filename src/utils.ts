@@ -192,13 +192,36 @@ export function removeItem(key: string) {
 }
 
 /**
- * 获取storage缓存的大小
+ * 获取storage缓存的字节大小
  * @returns {Promise<number>}
  */
 export async function getCacheSize(): Promise<number> {
     const keys = await getAllCacheKeys();
     const allCacheData = await Promise.all(keys.map((key) => options.store!.getItem(appendKey(key))));
     return allCacheData.reduce((a, b) => {
-        return a + (b?.length || 0);
+        return a + getBytesLength(b || '');
     }, 0);
+}
+
+/**
+ * 获取字符串字节大小
+ * @param str
+ * @returns {number}
+ */
+function getBytesLength(str: string) {
+    let totalLength = 0;
+    let charCode;
+    for (let i = 0; i < str.length; i++) {
+        charCode = str.charCodeAt(i);
+        if (charCode < 0x007f) {
+            totalLength++;
+        } else if ((0x0080 <= charCode) && (charCode <= 0x07ff)) {
+            totalLength += 2;
+        } else if ((0x0800 <= charCode) && (charCode <= 0xffff)) {
+            totalLength += 3;
+        } else {
+            totalLength += 4;
+        }
+    }
+    return totalLength;
 }
